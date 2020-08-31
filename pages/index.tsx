@@ -14,7 +14,7 @@ export const Home = (): JSX.Element => {
           Welcome to <a href="https://nextjs.org">Next.js!</a>
         </h1>
         {isReady &&
-          (!isAuthenticated() ? (
+          (!isAuthenticated ? (
             <button onClick={signIn}>Sign In</button>
           ) : (
             <button onClick={signOut}>Sign Out</button>

@@ -27,12 +27,7 @@ export const config: Configuration = {
 
 // Authentication Parameters
 export const parameters: AuthenticationParameters = {
-  scopes: [
-    'https://interactivelabsad.onmicrosoft.com/api/demo.read',
-    'https://interactivelabsad.onmicrosoft.com/api/demo.write',
-    'openid',
-    'offline_access',
-  ],
+  scopes: ['openid', 'offline_access', 'profile', 'email'],
 };
 
 // Options
