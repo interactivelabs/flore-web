@@ -6,42 +6,49 @@ import {
   Configuration,
   InteractionRequiredAuthError,
   UserAgentApplication,
-} from 'msal'
+} from 'msal';
 
-import { AccessTokenResponse } from './AccessTokenResponse'
-import { IdTokenResponse } from './IdTokenResponse'
-import {
-  IAccountInfo,
-  IAuthProvider,
-  IMsalAuthProviderConfig,
-} from './interfaces'
-import { Logger } from './Logger'
-import { AuthenticationState, LoginType, TokenType } from './enums'
+import { AccessTokenResponse } from './AccessTokenResponse';
+import { IdTokenResponse } from './IdTokenResponse';
+import { Logger } from './Logger';
+import { IAccountInfo } from './interfaces/IAccountInfo';
+import { IAuthProvider } from './interfaces/IAuthProvider';
+import { IMsalAuthProviderConfig } from './interfaces/IMsalAuthProviderConfig';
+import { AuthenticationState } from './enums/AuthenticationState';
+import { LoginType } from './enums/LoginType';
+import { TokenType } from './enums/TokenType';
+import { InitState } from './enums/InitState';
 
-type AuthenticationStateHandler = (state: AuthenticationState) => void
-type ErrorHandler = (error: AuthError | null) => void
-type AccountInfoHandlers = (accountInfo: IAccountInfo | null) => void
+export type AuthenticationStateHandler = (state: AuthenticationState) => void;
+export type ErrorHandler = (error: AuthError | undefined) => void;
+export type AccountInfoHandlers = (
+  accountInfo: IAccountInfo | undefined,
+) => void;
+export type InitInfoHandler = (initState: InitState) => void;
 
 export class MsalAuthProvider
   extends UserAgentApplication
   implements IAuthProvider {
-  public authenticationState: AuthenticationState
+  public authenticationState: AuthenticationState;
 
   /**
    * Gives access to the MSAL functionality for advanced usage.
    *
    * @deprecated The MsalAuthProvider class itself extends from UserAgentApplication and has the same functionality
    */
-  public UserAgentApplication: UserAgentApplication
+  public UserAgentApplication: UserAgentApplication;
 
-  protected _parameters: AuthenticationParameters
-  protected _options: IMsalAuthProviderConfig
-  protected _accountInfo: IAccountInfo | null
-  protected _error: AuthError | null
+  protected _parameters: AuthenticationParameters;
+  protected _options: IMsalAuthProviderConfig;
+  protected _accountInfo: IAccountInfo | undefined;
+  protected _error: AuthError | undefined;
 
-  private _onAuthenticationStateHandlers = new Set<AuthenticationStateHandler>()
-  private _onAccountInfoHandlers = new Set<AccountInfoHandlers>()
-  private _onErrorHandlers = new Set<ErrorHandler>()
+  private _onAuthenticationStateHandlers = new Set<
+    AuthenticationStateHandler
+  >();
+  private _onAccountInfoHandlers = new Set<AccountInfoHandlers>();
+  private _onErrorHandlers = new Set<ErrorHandler>();
+  private _onInitInfoHandlers = new Set<InitInfoHandler>();
 
   constructor(
     config: Configuration,
@@ -49,69 +56,65 @@ export class MsalAuthProvider
     options: IMsalAuthProviderConfig = {
       loginType: LoginType.Popup,
       tokenRefreshUri: window.location.origin,
-    }
+    },
   ) {
-    super(config)
+    super(config);
 
     // Required only for backward compatibility
-    this.UserAgentApplication = this as UserAgentApplication
+    this.UserAgentApplication = this as UserAgentApplication;
 
-    this.setAuthenticationParameters(parameters)
-    this.setProviderOptions(options)
+    this.setAuthenticationParameters(parameters);
+    this.setProviderOptions(options);
 
-    this.initializeProvider()
+    this.initializeProvider();
   }
 
-  public login = async (parameters?: AuthenticationParameters) => {
-    const params = parameters || this.getAuthenticationParameters()
+  public login = async (
+    parameters?: AuthenticationParameters,
+  ): Promise<void> => {
+    const params = parameters || this.getAuthenticationParameters();
 
     // Clear any active authentication errors unless the code is executing from within
     // the token renewal iframe
-    const error = this.getError()
+    const error = this.getError();
     if (error && error.errorCode !== 'block_token_requests') {
-      this.setError(null)
+      this.setError(undefined);
     }
 
-    const providerOptions = this.getProviderOptions()
+    const providerOptions = this.getProviderOptions();
     if (providerOptions.loginType === LoginType.Redirect) {
-      this.setAuthenticationState(AuthenticationState.InProgress)
+      this.setAuthenticationState(AuthenticationState.InProgress);
       try {
-        this.loginRedirect(params)
+        this.loginRedirect(params);
       } catch (error) {
-        Logger.ERROR(error)
+        Logger.ERROR(error);
 
-        this.setError(error)
-        this.setAuthenticationState(AuthenticationState.Unauthenticated)
+        this.setError(error);
+        this.setAuthenticationState(AuthenticationState.Unauthenticated);
       }
     } else if (providerOptions.loginType === LoginType.Popup) {
       try {
-        this.setAuthenticationState(AuthenticationState.InProgress)
-        await this.loginPopup(params)
+        this.setAuthenticationState(AuthenticationState.InProgress);
+        await this.loginPopup(params);
       } catch (error) {
-        Logger.ERROR(error)
+        Logger.ERROR(error);
 
-        this.setError(error)
-        this.setAuthenticationState(AuthenticationState.Unauthenticated)
+        this.setError(error);
+        this.setAuthenticationState(AuthenticationState.Unauthenticated);
       }
 
-      await this.processLogin()
+      await this.processLogin();
     }
-  }
+  };
 
-  public logout = (): void => {
-    super.logout()
-
-    this.dispatchAction(AuthenticationActionCreators.logoutSuccessful())
-  }
-
-  public getAccountInfo = (): IAccountInfo | null => {
-    return this._accountInfo ? { ...this._accountInfo } : null
-  }
+  public getAccountInfo = (): IAccountInfo | undefined => {
+    return this._accountInfo ? { ...this._accountInfo } : undefined;
+  };
 
   public getAccessToken = async (
-    parameters?: AuthenticationParameters
+    parameters?: AuthenticationParameters,
   ): Promise<AccessTokenResponse> => {
-    const providerOptions = this.getProviderOptions()
+    const providerOptions = this.getProviderOptions();
 
     // The parameters to be used when silently refreshing the token
     const refreshParams = {
@@ -120,7 +123,7 @@ export class MsalAuthProvider
       redirectUri:
         (parameters && parameters.redirectUri) ||
         providerOptions.tokenRefreshUri,
-    }
+    };
 
     /* In this library, acquireTokenSilent is being called only when there is an accountInfo of an expired session.
      *  In a scenario where user interaction is required, username from the account info is passed as 'login_hint'
@@ -132,37 +135,33 @@ export class MsalAuthProvider
       refreshParams.extraQueryParameters &&
       refreshParams.extraQueryParameters.domain_hint
     ) {
-      delete refreshParams.extraQueryParameters.domain_hint
+      delete refreshParams.extraQueryParameters.domain_hint;
     }
 
     try {
-      const response = await this.acquireTokenSilent(refreshParams)
+      const response = await this.acquireTokenSilent(refreshParams);
 
-      this.handleAcquireTokenSuccess(response)
-      this.setAuthenticationState(AuthenticationState.Authenticated)
+      this.handleAcquireTokenSuccess(response);
+      this.setAuthenticationState(AuthenticationState.Authenticated);
 
-      return new AccessTokenResponse(response)
+      return new AccessTokenResponse(response);
     } catch (error) {
       // The parameters to be used if silent refresh failed, and a new login needs to be initiated
       const loginParams = {
         ...(parameters || this.getAuthenticationParameters()),
-      }
+      };
+      const response = await this.loginToRefreshToken(error, loginParams);
 
-      this.dispatchAction(
-        AuthenticationActionCreators.acquireAccessTokenError(error)
-      )
-      const response = await this.loginToRefreshToken(error, loginParams)
-
-      return new AccessTokenResponse(response)
+      return new AccessTokenResponse(response);
     }
-  }
+  };
 
   public getIdToken = async (
-    parameters?: AuthenticationParameters
+    parameters?: AuthenticationParameters,
   ): Promise<IdTokenResponse> => {
-    const providerOptions = this.getProviderOptions()
-    const config = this.getCurrentConfiguration()
-    const clientId = config.auth.clientId
+    const providerOptions = this.getProviderOptions();
+    const config = this.getCurrentConfiguration();
+    const clientId = config.auth.clientId;
 
     // The parameters to be used when silently refreshing the token
     const refreshParams = {
@@ -173,7 +172,7 @@ export class MsalAuthProvider
         providerOptions.tokenRefreshUri,
       // Pass the clientId as the only scope to get a renewed IdToken if it has expired
       scopes: [clientId],
-    }
+    };
 
     /* In this library, acquireTokenSilent is being called only when there is an accountInfo of an expired session.
      *  In a scenario where user interaction is required, username from the account info is passed as 'login_hint'
@@ -185,180 +184,163 @@ export class MsalAuthProvider
       refreshParams.extraQueryParameters &&
       refreshParams.extraQueryParameters.domain_hint
     ) {
-      delete refreshParams.extraQueryParameters.domain_hint
+      delete refreshParams.extraQueryParameters.domain_hint;
     }
 
     try {
-      const response = await this.acquireTokenSilent(refreshParams)
+      const response = await this.acquireTokenSilent(refreshParams);
 
-      this.handleAcquireTokenSuccess(response)
-      this.setAuthenticationState(AuthenticationState.Authenticated)
+      this.handleAcquireTokenSuccess(response);
+      this.setAuthenticationState(AuthenticationState.Authenticated);
 
-      return new IdTokenResponse(response)
+      return new IdTokenResponse(response);
     } catch (error) {
       // The parameters to be used if silent refresh failed, and a new login needs to be initiated
       const loginParams = {
         ...(parameters || this.getAuthenticationParameters()),
-      }
+      };
 
       // If the parameters do not specify a login hint and the user already has a session cached,
       // prefer the cached user name to bypass the account selection process if possible
-      const account = this.getAccount()
+      const account = this.getAccount();
       if (account && (!parameters || !parameters.loginHint)) {
-        loginParams.loginHint = account.userName
+        loginParams.loginHint = account.userName;
       }
+      const response = await this.loginToRefreshToken(error, loginParams);
 
-      this.dispatchAction(
-        AuthenticationActionCreators.acquireIdTokenError(error)
-      )
-      const response = await this.loginToRefreshToken(error, loginParams)
-
-      return new IdTokenResponse(response)
+      return new IdTokenResponse(response);
     }
-  }
+  };
 
   public getAuthenticationParameters = (): AuthenticationParameters => {
-    return { ...this._parameters }
-  }
+    return { ...this._parameters };
+  };
 
-  public getError = () => {
-    return this._error ? { ...this._error } : null
-  }
+  public getError = (): AuthError | undefined =>
+    this._error ? { ...this._error } : undefined;
 
   public setAuthenticationParameters = (
-    parameters: AuthenticationParameters
+    parameters: AuthenticationParameters,
   ): void => {
-    this._parameters = { ...parameters }
-  }
+    this._parameters = { ...parameters };
+  };
 
-  public getProviderOptions = (): IMsalAuthProviderConfig => {
-    return { ...this._options }
-  }
+  public getProviderOptions = (): IMsalAuthProviderConfig => ({
+    ...this._options,
+  });
 
-  public setProviderOptions = (options: IMsalAuthProviderConfig) => {
-    this._options = { ...options }
+  public setProviderOptions = (options: IMsalAuthProviderConfig): void => {
+    this._options = { ...options };
     if (options.loginType === LoginType.Redirect) {
-      this.handleRedirectCallback(this.authenticationRedirectCallback)
+      this.handleRedirectCallback(this.authenticationRedirectCallback);
     }
-  }
-
-  public registerReduxStore = (store: Store): void => {
-    this._reduxStore = store
-    while (this._actionQueue.length) {
-      const action = this._actionQueue.shift()
-      if (action) {
-        this.dispatchAction(action)
-      }
-    }
-  }
+  };
 
   public registerAuthenticationStateHandler = (
-    listener: AuthenticationStateHandler
-  ) => {
-    this._onAuthenticationStateHandlers.add(listener)
-    listener(this.authenticationState)
-  }
+    listener: AuthenticationStateHandler,
+  ): void => {
+    this._onAuthenticationStateHandlers.add(listener);
+    listener(this.authenticationState);
+  };
 
   public unregisterAuthenticationStateHandler = (
-    listener: AuthenticationStateHandler
-  ) => {
-    this._onAuthenticationStateHandlers.delete(listener)
-  }
+    listener: AuthenticationStateHandler,
+  ): void => {
+    this._onAuthenticationStateHandlers.delete(listener);
+  };
 
-  public registerAcountInfoHandler = (listener: AccountInfoHandlers) => {
-    this._onAccountInfoHandlers.add(listener)
-    listener(this._accountInfo)
-  }
+  public registerAcountInfoHandler = (listener: AccountInfoHandlers): void => {
+    this._onAccountInfoHandlers.add(listener);
+    listener(this._accountInfo);
+  };
 
-  public unregisterAccountInfoHandler = (listener: AccountInfoHandlers) => {
-    this._onAccountInfoHandlers.delete(listener)
-  }
+  public unregisterAccountInfoHandler = (
+    listener: AccountInfoHandlers,
+  ): void => {
+    this._onAccountInfoHandlers.delete(listener);
+  };
 
-  public registerErrorHandler = (listener: ErrorHandler) => {
-    this._onErrorHandlers.add(listener)
-    listener(this._error)
-  }
+  public registerErrorHandler = (listener: ErrorHandler): void => {
+    this._onErrorHandlers.add(listener);
+    listener(this._error);
+  };
 
-  public unregisterErrorHandler = (listener: ErrorHandler) => {
-    this._onErrorHandlers.delete(listener)
-  }
+  public unregisterErrorHandler = (listener: ErrorHandler): void => {
+    this._onErrorHandlers.delete(listener);
+  };
 
-  private setError = (error: AuthError | null) => {
-    this._error = error ? { ...error } : null
+  public registerInitInfoHandler = (listener: InitInfoHandler): void => {
+    this._onInitInfoHandlers.add(listener);
+  };
 
-    if (error) {
-      this.dispatchAction(AuthenticationActionCreators.loginError(error))
-    }
+  public unregisterInitInfoHandler = (listener: InitInfoHandler): void => {
+    this._onInitInfoHandlers.delete(listener);
+  };
 
-    this._onErrorHandlers.forEach((listener) => listener(this._error))
-
-    return { ...this._error }
-  }
+  private setError = (error: AuthError | undefined) => {
+    this._error = error ? { ...error } : undefined;
+    this._onErrorHandlers.forEach((listener) => listener(this._error));
+    return { ...this._error };
+  };
 
   private loginToRefreshToken = async (
     error: AuthError,
-    parameters?: AuthenticationParameters
+    parameters?: AuthenticationParameters,
   ): Promise<AuthResponse> => {
-    const providerOptions = this.getProviderOptions()
-    const params = parameters || this.getAuthenticationParameters()
+    const providerOptions = this.getProviderOptions();
+    const params = parameters || this.getAuthenticationParameters();
 
     if (error instanceof InteractionRequiredAuthError) {
       if (providerOptions.loginType === LoginType.Redirect) {
-        this.acquireTokenRedirect(params)
+        this.acquireTokenRedirect(params);
 
         // Nothing to return, the user is redirected to the login page
-        return new Promise<AuthResponse>((resolve) => resolve())
+        return new Promise<AuthResponse>((resolve) => resolve());
       }
 
       try {
-        const response = await this.acquireTokenPopup(params)
-        this.handleAcquireTokenSuccess(response)
-        this.setAuthenticationState(AuthenticationState.Authenticated)
-        return response
+        const response = await this.acquireTokenPopup(params);
+        this.handleAcquireTokenSuccess(response);
+        this.setAuthenticationState(AuthenticationState.Authenticated);
+        return response;
       } catch (error) {
-        Logger.ERROR(error)
+        Logger.ERROR(error);
 
-        this.setError(error)
-        this.setAuthenticationState(AuthenticationState.Unauthenticated)
+        this.setError(error);
+        this.setAuthenticationState(AuthenticationState.Unauthenticated);
 
-        throw error
+        throw error;
       }
     } else {
-      Logger.ERROR(error as any)
+      Logger.ERROR(error as any);
 
-      this.setError(error)
-      this.setAuthenticationState(AuthenticationState.Unauthenticated)
+      this.setError(error);
+      this.setAuthenticationState(AuthenticationState.Unauthenticated);
 
-      throw error
+      throw error;
     }
-  }
+  };
 
   private authenticationRedirectCallback = (error: AuthError) => {
     if (error) {
-      this.setError(error)
+      this.setError(error);
     }
-    this.processLogin()
-  }
+    this.processLogin();
+  };
 
   private initializeProvider = async () => {
-    this.dispatchAction(AuthenticationActionCreators.initializing())
-
-    await this.processLogin()
-
-    this.dispatchAction(AuthenticationActionCreators.initialized())
-  }
+    this.setInitState(InitState.InProgress);
+    await this.processLogin();
+    this.setInitState(InitState.Completed);
+  };
 
   private processLogin = async () => {
     if (this.getError()) {
-      this.handleLoginFailed()
-
-      this.setAuthenticationState(AuthenticationState.Unauthenticated)
+      this.setAuthenticationState(AuthenticationState.Unauthenticated);
     } else if (this.getAccount()) {
       try {
         // If the IdToken has expired, refresh it. Otherwise use the cached token
-        await this.getIdToken()
-
-        this.handleLoginSuccess()
+        await this.getIdToken();
       } catch (error) {
         // Swallow the error if the user isn't authenticated, just set to Unauthenticated
         if (
@@ -367,80 +349,56 @@ export class MsalAuthProvider
             error.errorCode === 'user_login_error'
           )
         ) {
-          Logger.ERROR(error)
-          this.setError(error)
+          Logger.ERROR(error);
+          this.setError(error);
         }
 
-        this.setAuthenticationState(AuthenticationState.Unauthenticated)
+        this.setAuthenticationState(AuthenticationState.Unauthenticated);
       }
     } else if (this.getLoginInProgress()) {
-      this.setAuthenticationState(AuthenticationState.InProgress)
+      this.setAuthenticationState(AuthenticationState.InProgress);
     } else {
-      this.setAuthenticationState(AuthenticationState.Unauthenticated)
+      this.setAuthenticationState(AuthenticationState.Unauthenticated);
     }
-  }
+  };
 
   private setAuthenticationState = (
-    state: AuthenticationState
+    state: AuthenticationState,
   ): AuthenticationState => {
     if (this.authenticationState !== state) {
-      this.authenticationState = state
-
-      this.dispatchAction(
-        AuthenticationActionCreators.authenticatedStateChanged(state)
-      )
-      this._onAuthenticationStateHandlers.forEach((listener) => listener(state))
+      this.authenticationState = state;
+      this._onAuthenticationStateHandlers.forEach((listener) =>
+        listener(state),
+      );
     }
 
-    return this.authenticationState
-  }
+    return this.authenticationState;
+  };
+
+  private setInitState = (state: InitState) => {
+    this._onInitInfoHandlers.forEach((listener) => listener(state));
+  };
 
   private setAccountInfo = (response: AuthResponse): IAccountInfo => {
     const accountInfo: IAccountInfo =
-      this.getAccountInfo() || ({ account: response.account } as IAccountInfo)
+      this.getAccountInfo() || ({ account: response.account } as IAccountInfo);
 
     // Depending on the token type of the auth response, update the correct property
     if (response.tokenType === TokenType.IdToken) {
-      accountInfo.jwtIdToken = response.idToken.rawIdToken
+      accountInfo.jwtIdToken = response.idToken.rawIdToken;
     } else if (response.tokenType === TokenType.AccessToken) {
-      accountInfo.jwtAccessToken = response.accessToken
+      accountInfo.jwtAccessToken = response.accessToken;
     }
 
-    this._accountInfo = { ...accountInfo }
+    this._accountInfo = { ...accountInfo };
     this._onAccountInfoHandlers.forEach((listener) =>
-      listener(this._accountInfo)
-    )
+      listener(this._accountInfo),
+    );
 
-    return { ...this._accountInfo }
-  }
+    return { ...this._accountInfo };
+  };
 
   private handleAcquireTokenSuccess = (response: AuthResponse): void => {
-    this.setAccountInfo(response)
-
-    if (response.tokenType === TokenType.IdToken) {
-      const token = new IdTokenResponse(response)
-      this.dispatchAction(
-        AuthenticationActionCreators.acquireIdTokenSuccess(token)
-      )
-    } else if (response.tokenType === TokenType.AccessToken) {
-      const token = new AccessTokenResponse(response)
-      this.dispatchAction(
-        AuthenticationActionCreators.acquireAccessTokenSuccess(token)
-      )
-    }
-  }
-
-  private handleLoginFailed = (): void => {
-    const error = this.getError()
-    if (error) {
-      this.dispatchAction(AuthenticationActionCreators.loginFailed())
-    }
-  }
-
-  private handleLoginSuccess = (): void => {
-    const account = this.getAccountInfo()
-    if (account) {
-      this.dispatchAction(AuthenticationActionCreators.loginSuccessful(account))
-    }
-  }
+    this.setAccountInfo(response);
+  };
 }

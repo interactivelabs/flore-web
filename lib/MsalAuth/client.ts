@@ -1,125 +1,152 @@
-import { createContext } from 'react'
+import {
+  createContext,
+  useReducer,
+  createElement,
+  ReactElement,
+  useContext,
+  useEffect,
+} from 'react';
+import { MsalAuthProvider } from './MsalAuthProvider';
+import {
+  SessionContextValue,
+  IMsalProviderInitOptions,
+} from './interfaces/IMsalAuthClientTypes';
+import { SessionAction, SESSION_ACTIONS } from './enums/AuthenticationActions';
+import { AuthenticationProviderState } from './enums/AuthenticationProviderState';
+import { AuthenticationState } from './enums/AuthenticationState';
+import { IAccountInfo } from './interfaces/IAccountInfo';
+import { AuthError } from 'msal';
+import { AccessTokenResponse } from './AccessTokenResponse';
+import { InitState } from './enums/InitState';
+
+const initialState: AuthenticationProviderState = {
+  isReady: false,
+  authenticationState: AuthenticationState.Unauthenticated,
+  loading: false,
+  accountInfo: undefined,
+  error: undefined,
+  msalAuthProvider: undefined,
+};
 
 // Context to store session data globally
-const SessionContext = createContext()
+const SessionContext = createContext<Partial<SessionContextValue>>({
+  session: initialState,
+});
 
-// Universal method (client + server)
-const getSession = async ({ req, ctx, triggerEvent = true } = {}) => {
-  // If passed 'appContext' via getInitialProps() in _app.js then get the req
-  // object from ctx and use that for the req value to allow getSession() to
-  // work seemlessly in getInitialProps() on server side pages *and* in _app.js.
-  if (!req && ctx && ctx.req) {
-    req = ctx.req
-  }
-
-  const baseUrl = _apiBaseUrl()
-  const fetchOptions = req ? { headers: { cookie: req.headers.cookie } } : {}
-  const session = await _fetchData(`${baseUrl}/session`, fetchOptions)
-  if (triggerEvent) {
-    _sendMessage({ event: 'session', data: { trigger: 'getSession' } })
-  }
-  return session
-}
-
-// Client side method
-const useSession = (session) => {
-  // Try to use context if we can
-  const value = useContext(SessionContext)
-
-  // If we have no Provider in the tree, call the actual hook
-  if (value === undefined) {
-    return _useSessionHook(session)
-  }
-
-  return value
-}
-
-// Internal hook for getting session from the api.
-const _useSessionHook = (session) => {
-  const [data, setData] = useState(session)
-  const [loading, setLoading] = useState(true)
-  const _getSession = async ({ event = null } = {}) => {
-    try {
-      const triggredByEvent = event !== null
-      const triggeredByStorageEvent = !!(event && event === 'storage')
-
-      const clientMaxAge = __NEXTAUTH.clientMaxAge
-      const clientLastSync = parseInt(__NEXTAUTH._clientLastSync)
-      const currentTime = Math.floor(new Date().getTime() / 1000)
-      const clientSession = __NEXTAUTH._clientSession
-
-      // Updates triggered by a storage event *always* trigger an update and we
-      // always update if we don't have any value for the current session state.
-      if (triggeredByStorageEvent === false && clientSession !== undefined) {
-        if (clientMaxAge === 0 && triggredByEvent !== true) {
-          // If there is no time defined for when a session should be considered
-          // stale, then it's okay to use the value we have until an event is
-          // triggered which updates it.
-          return
-        } else if (clientMaxAge > 0 && clientSession === null) {
-          // If the client doesn't have a session then we don't need to call
-          // the server to check if it does (if they have signed in via another
-          // tab or window that will come through as a triggeredByStorageEvent
-          // event and will skip this logic)
-          return
-        } else if (
-          clientMaxAge > 0 &&
-          currentTime < clientLastSync + clientMaxAge
-        ) {
-          // If the session freshness is within clientMaxAge then don't request
-          // it again on this call (avoids too many invokations).
-          return
-        }
-      }
-
-      if (clientSession === undefined) {
-        __NEXTAUTH._clientSession = null
-      }
-
-      // Update clientLastSync before making response to avoid repeated
-      // invokations that would otherwise be triggered while we are still
-      // waiting for a response.
-      __NEXTAUTH._clientLastSync = Math.floor(new Date().getTime() / 1000)
-
-      // If this call was invoked via a storage event (i.e. another window) then
-      // tell getSession not to trigger an event when it calls to avoid an
-      // infinate loop.
-      const triggerEvent = triggeredByStorageEvent === false
-      const newClientSessionData = await getSession({ triggerEvent })
-
-      // Save session state internally, just so we can track that we've checked
-      // if a session exists at least once.
-      __NEXTAUTH._clientSession = newClientSessionData
-
-      setData(newClientSessionData)
-      setLoading(false)
-    } catch (error) {
-      logger.error('CLIENT_USE_SESSION_ERROR', error)
+const sessionReducer = (
+  session: AuthenticationProviderState,
+  action: SessionAction,
+): AuthenticationProviderState => {
+  switch (action.type) {
+    case SESSION_ACTIONS.INIT_MSAL_PROVIDER: {
+      return {
+        ...session,
+        msalAuthProvider: action.payload,
+      };
     }
+    case SESSION_ACTIONS.INIT_STATE: {
+      const initState: InitState = action.payload;
+      return { ...session, isReady: initState === InitState.Completed };
+    }
+    case SESSION_ACTIONS.AUTH_STATE_CHANGE: {
+      const authenticationState: AuthenticationState = action.payload;
+      return {
+        ...session,
+        authenticationState,
+        loading: authenticationState === AuthenticationState.InProgress,
+      };
+    }
+    case SESSION_ACTIONS.ACCOUNT_INFO_CHANGE: {
+      return { ...session, accountInfo: action.payload };
+    }
+    case SESSION_ACTIONS.ERROR: {
+      return { ...session, error: action.payload };
+    }
+    default:
+      return { ...session };
   }
+};
 
-  __NEXTAUTH._getSession = _getSession
-
-  useEffect(() => {
-    _getSession()
-  })
-  return [data, loading]
+export interface MsalProviderProps {
+  children: ReactElement;
+  options: IMsalProviderInitOptions;
 }
 
 // Provider to wrap the app in to make session data available globally
-const Provider = ({ children, session, options }) => {
-  setOptions(options)
+export const Provider = ({
+  children,
+  options,
+}: MsalProviderProps): ReactElement => {
+  const [session, dispatch] = useReducer(sessionReducer, initialState);
+  const setAuthenticationState = (state: AuthenticationState) =>
+    dispatch({ type: SESSION_ACTIONS.AUTH_STATE_CHANGE, payload: state });
+  const setAcountInfo = (accountInfo?: IAccountInfo) =>
+    dispatch({
+      type: SESSION_ACTIONS.ACCOUNT_INFO_CHANGE,
+      payload: accountInfo,
+    });
+  const setError = (error?: AuthError) =>
+    dispatch({ type: SESSION_ACTIONS.ERROR, payload: error });
+  const setIsReady = (state: InitState) =>
+    dispatch({ type: SESSION_ACTIONS.INIT_STATE, payload: state });
+  useEffect(() => {
+    if (!session.msalAuthProvider) {
+      const msalAuthProvider = new MsalAuthProvider(
+        options.config,
+        options.parameters,
+        options.options,
+      );
+      msalAuthProvider.registerAcountInfoHandler(setAcountInfo);
+      msalAuthProvider.registerAuthenticationStateHandler(
+        setAuthenticationState,
+      );
+      msalAuthProvider.registerErrorHandler(setError);
+      msalAuthProvider.registerInitInfoHandler(setIsReady);
+      dispatch({
+        type: SESSION_ACTIONS.INIT_MSAL_PROVIDER,
+        payload: msalAuthProvider,
+      });
+    }
+  }, [dispatch, options]);
   return createElement(
     SessionContext.Provider,
-    { value: useSession(session) },
-    children
-  )
-}
+    { value: { session, dispatch } },
+    children,
+  );
+};
 
-export default {
-  getSession,
-  useSession,
-  signIn,
-  signOut,
-  Provider,
-}
+export type UseSession = {
+  signIn: () => void;
+  signOut: () => void;
+  isAuthenticated: () => boolean;
+  getAccessToken: () => Promise<string>;
+  loading: boolean;
+  isReady: boolean;
+};
+
+// Internal hook for getting session from the api.
+export const useSession = (): UseSession => {
+  const { session } = useContext(SessionContext);
+  const signIn = (): void => {
+    session.msalAuthProvider.login();
+  };
+  const signOut = (): void => {
+    session.msalAuthProvider.logout();
+  };
+  const isAuthenticated = (): boolean =>
+    session.authenticationState === AuthenticationState.Authenticated;
+  const getAccessToken = async () => {
+    const token: AccessTokenResponse = await session.msalAuthProvider.getAccessToken();
+    return token.accessToken;
+  };
+  const loading = session.loading;
+  const isReady = session.isReady;
+  return {
+    signIn,
+    signOut,
+    isAuthenticated,
+    getAccessToken,
+    loading,
+    isReady,
+  };
+};
