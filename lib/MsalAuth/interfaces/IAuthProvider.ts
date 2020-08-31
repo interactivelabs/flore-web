@@ -1,5 +1,5 @@
-import { AuthenticationState } from '../enums';
-import { IAccountInfo } from './';
+import { AuthenticationState } from '../enums/AuthenticationState';
+import { IAccountInfo } from './IAccountInfo';
 
 export interface IAuthProvider {
   onAuthenticationStateChanged?: (
