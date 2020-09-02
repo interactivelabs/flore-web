@@ -26,21 +26,22 @@
     ]
   },
   "dependencies": {
+    "apollo-datasource-rest": "^0.9.3",
     "msal": "^1.4.0",
-    "next": "latest",
+    "next": "9.5.3",
     "react": "^16.13.1",
     "react-dom": "^16.13.1"
   },
   "devDependencies": {
     "@testing-library/react": "^10.0.1",
-    "@types/jest": "^26.0.10",
+    "@types/jest": "^26.0.12",
     "@types/node": "^14.6.2",
-    "@types/react": "^16.9.27",
+    "@types/react": "^16.9.49",
     "@types/testing-library__react": "^10.0.0",
-    "@typescript-eslint/eslint-plugin": "^3.10.1",
-    "@typescript-eslint/parser": "^3.10.1",
+    "@typescript-eslint/eslint-plugin": "^4.0.1",
+    "@typescript-eslint/parser": "^4.0.1",
     "babel-jest": "^26.3.0",
-    "eslint": "^7.7.0",
+    "eslint": "^7.8.1",
     "eslint-config-prettier": "^6.10.1",
     "eslint-plugin-react": "^7.19.0",
     "husky": "^4.2.3",

@@ -1,5 +1,5 @@
 import Head from 'next/head';
-import { useSession } from '../lib/MsalAuth/client';
+import { useSession } from '../lib/auth/MsalAuth/client';
 
 export const Home = (): JSX.Element => {
   const { signIn, signOut, isAuthenticated, isReady } = useSession();

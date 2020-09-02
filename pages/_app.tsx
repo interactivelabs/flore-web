@@ -1,5 +1,5 @@
-import { Provider as SessionProvider } from '../lib/MsalAuth/client';
-import { getMsalAuthConfig } from '../lib/getMsalAuthConfig';
+import { Provider as SessionProvider } from '../lib/auth/MsalAuth/client';
+import { getMsalAuthConfig } from '../lib/auth/getMsalAuthConfig';
 import { AppPropsType } from 'next/dist/next-server/lib/utils';
 
 const App = ({ Component, pageProps }: AppPropsType): JSX.Element => {
