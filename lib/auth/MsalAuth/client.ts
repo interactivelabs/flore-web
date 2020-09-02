@@ -28,7 +28,6 @@ const initialState: AuthenticationProviderState = {
   msalAuthProvider: undefined,
 };
 
-// Context to store session data globally
 const SessionContext = createContext<Partial<SessionContextValue>>({
   session: initialState,
 });
