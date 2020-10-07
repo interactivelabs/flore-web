@@ -117,7 +117,7 @@ export const Provider = ({
 export type UseSession = {
   signIn: () => void;
   signOut: () => void;
-  getAccessToken: () => Promise<string>;
+  getAccessToken: (scopes: Array<string>) => Promise<string>;
   isAuthenticated: boolean;
   loading: boolean;
   isReady: boolean;
@@ -134,8 +134,10 @@ export const useSession = (): UseSession => {
   };
   const isAuthenticated =
     session.authenticationState === AuthenticationState.Authenticated;
-  const getAccessToken = async () => {
-    const token: AccessTokenResponse = await session.msalAuthProvider.getAccessToken();
+  const getAccessToken = async (scopes: Array<string>) => {
+    const token: AccessTokenResponse = await session.msalAuthProvider.getAccessToken(
+      { scopes },
+    );
     return token.accessToken;
   };
   const loading = session.loading;

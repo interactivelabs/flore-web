@@ -1,7 +1,7 @@
 import Head from 'next/head';
 import { useSession } from '../lib/auth/MsalAuth/client';
 
-export const Home = (): JSX.Element => {
+export const Index = (): JSX.Element => {
   const { signIn, signOut, isAuthenticated, isReady } = useSession();
   return (
     <div className="container">
@@ -24,4 +24,4 @@ export const Home = (): JSX.Element => {
   );
 };
 
-export default Home;
+export default Index;

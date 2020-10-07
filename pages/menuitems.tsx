@@ -1,6 +1,6 @@
 import { useSession } from '../lib/auth/MsalAuth/client';
 
-export const Profile = (): JSX.Element => {
+export const MenuITems = (): JSX.Element => {
   const { isAuthenticated, isReady } = useSession();
   if (!isReady) {
     return <div>Loading Auth</div>;
@@ -11,10 +11,10 @@ export const Profile = (): JSX.Element => {
   return (
     <div className="container">
       <main>
-        <h1 className="title">Profile</h1>
+        <h1 className="title">Menu Items</h1>
       </main>
     </div>
   );
 };
 
-export default Profile;
+export default MenuITems;
