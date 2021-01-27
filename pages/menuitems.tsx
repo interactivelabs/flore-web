@@ -21,7 +21,7 @@ export const MenuITems = (): JSX.Element => {
   }
 
   return (
-    <div className="container">
+    <div className="container mx-auto">
       <main>
         <h1 className="title">Menu Items</h1>
         <div>Token {token}</div>

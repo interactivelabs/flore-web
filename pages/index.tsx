@@ -4,7 +4,7 @@ import { useSession } from '../lib/auth/MsalAuth/client';
 export const Index = (): JSX.Element => {
   const { signIn, signOut, isAuthenticated, isReady } = useSession();
   return (
-    <div className="container">
+    <div className="container mx-auto">
       <Head>
         <title>Create Next App</title>
         <link rel="icon" href="/favicon.ico" />

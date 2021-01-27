@@ -9,7 +9,7 @@ export const Profile = (): JSX.Element => {
     return <div>No Access</div>;
   }
   return (
-    <div className="container">
+    <div className="container mx-auto">
       <main>
         <h1 className="title">Profile</h1>
       </main>
