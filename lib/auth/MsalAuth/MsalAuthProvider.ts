@@ -43,9 +43,7 @@ export class MsalAuthProvider
   protected _accountInfo: IAccountInfo | undefined;
   protected _error: AuthError | undefined;
 
-  private _onAuthenticationStateHandlers = new Set<
-    AuthenticationStateHandler
-  >();
+  private _onAuthenticationStateHandlers = new Set<AuthenticationStateHandler>();
   private _onAccountInfoHandlers = new Set<AccountInfoHandlers>();
   private _onErrorHandlers = new Set<ErrorHandler>();
   private _onInitInfoHandlers = new Set<InitInfoHandler>();
